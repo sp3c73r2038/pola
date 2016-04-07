@@ -337,46 +337,58 @@ void children_io(int * fds, size_t count)
 }
 
 
-void master_loop(
-	const char * command,
-	const char * user,
-	int interval,
-	int proc_num)
+void spawn_missing_children(const app_t app, process_t * children, int * fds)
+{
+	for (size_t i = 0; i < app.proc_num; i++) {
+		if (children[i].pid > 0) continue;
+		memset(&children[i], 0, sizeof(process_t));
+		run_child(app.command, app.user, &children[i]);
+		fds[i] = children[i].fd;
+		sleep(app.interval);
+		break;
+	}
+}
+
+void reap_children(const app_t app, process_t * children, int * fds)
+{
+	int p_status = 0;
+	int p = waitpid(0, &p_status, WNOHANG);
+
+	if (p == -1) {
+		perror("waitpid()");
+	}
+	else if (p == 0) {
+		sleep(1);
+	}
+	else {
+		for (unsigned int i = 0; i < app.proc_num; i++) {
+			if (p != children[i].pid) continue;
+			printf("child %d exited\n", p);
+			children[i].fd = 0;
+			children[i].pid = 0;
+			fds[i] = 0;
+		}
+	}
+}
+
+
+void master_loop(const app_t app)
 {
 
-	int p_status = 0;
-	int fds[proc_num];
-	process_t children[proc_num];
+	int fds[app.proc_num];
+	process_t children[app.proc_num];
 
-	/* spawn new children */
-	for (int i = 0; i < proc_num; i++) {
+	/* init fds and children*/
+	for (unsigned int i = 0; i < app.proc_num; i++) {
+		fds[i] = 0;
 		memset(&children[i], 0, sizeof(process_t));
-		run_child(command, user, &children[i]);
-		fds[i] = children[i].fd;
-		sleep(interval);
+		children[i].pid = 0;
 	}
 
 	while (1) {
-		children_io(fds, proc_num);
-
-		int p = waitpid(0, &p_status, WNOHANG);
-
-		if (p == -1) {
-			perror("waitpid()");
-		}
-		else if (p == 0) {
-			sleep(1);
-		}
-		else {
-			for (int i = 0; i < proc_num; i++) {
-				if (p == children[i].pid) {
-					printf("child %d exited\n", p);
-					sleep(interval || 0);
-					run_child(command, user, &children[i]);
-					fds[i] = children[i].fd;
-				}
-			}
-		}
+		spawn_missing_children(app, children, fds);
+		children_io(fds, app.proc_num);
+		reap_children(app, children, fds);
 	}
 }
 
@@ -609,14 +621,10 @@ void status(const app_t app)
 }
 
 
-void run(
-	const char * command,
-	const char * user,
-	int interval,
-	int proc_num)
+void run(const app_t app)
 {
-	printf("[%s] run: %s\n", sys_argv[0], command);
-	master_loop(command, user, interval, proc_num);
+	printf("[%s] run: %s\n", sys_argv[0], app.command);
+	master_loop(app);
 }
 
 void run_daemon(app_t app)
@@ -648,7 +656,7 @@ void run_daemon(app_t app)
 
 	setproctitle(sys_argv[0], app.name);
 
-	run(app.command, app.user, app.interval, app.proc_num);
+	run(app);
 }
 
 void start(const app_t app)
@@ -676,7 +684,7 @@ void start(const app_t app)
 
 void start_foreground(const app_t app)
 {
-	run(app.command, app.user, app.interval, app.proc_num);
+	run(app);
 }
 
 
@@ -803,7 +811,14 @@ int main(int argc, const char ** argv)
 				printf("%s <command>\n", argv[0]);
 				exit(1);
 			}
-			run(argv[2], NULL, 1, 1);
+
+			app_t app;
+			memset(&app, 0, sizeof(app_t));
+			snprintf(app.command, strlen(argv[2]) + 1,
+					"%s", argv[2]);
+			app.proc_num = 1;
+			app.interval = 1;
+			run(app);
 			exit(1);
 		}
 		else if (!strcmp("start", argv[1])) {
