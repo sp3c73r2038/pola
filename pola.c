@@ -134,7 +134,7 @@ void switch_user(const char * user, char ** env)
 	printf("[%s] setuid to %d\n", sys_argv[0], p->pw_uid);
 
 	snprintf(env[0], strlen(p->pw_name) + 6, "USER=%s", p->pw_name);
-	snprintf(env[1], strlen(p->pw_name) + 6, "HOME=%s", p->pw_dir);
+	snprintf(env[1], strlen(p->pw_dir) + 6, "HOME=%s", p->pw_dir);
 	snprintf(env[2], strlen(p->pw_name) + 7, "LOGIN=%s", p->pw_name);
 }
 
