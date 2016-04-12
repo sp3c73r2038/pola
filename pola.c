@@ -587,36 +587,36 @@ void status(const app_t app)
 	int p = access(pid_fname, R_OK);
 
 	if (p == -1 && errno == ENOENT) {
-		printf("  %-20s : " ANSI_COLOR_BRIGHT_YELLOW
-			   "new" ANSI_COLOR_RESET "\n", app.name);
+		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-8s "
+			   ANSI_COLOR_RESET ": %s\n",
+			   "new", app.name);
 		return;
 	}
 
 	pid_t pid = read_pidfile(pid_fname);
 
 	if (pid > 0 && pid_alive(pid)) {
-		printf("  %-20s : "
-			   ANSI_COLOR_BRIGHT_GREEN
-			   "running"
+		printf(ANSI_COLOR_BRIGHT_GREEN
+			   "  %-8s"
 			   ANSI_COLOR_RESET
 			   " : "
 			   ANSI_COLOR_BRIGHT_CYAN
-			   "%d "
+			   "%6d"
 			   ANSI_COLOR_RESET
-			   "\n",
-			   app.name, pid);
+			   " : %s\n",
+			   "running",
+			   pid, app.name);
 	}
 	else {
-		printf("  %-20s : "
-			   ANSI_COLOR_BRIGHT_RED
-			   "stopped"
+		printf(ANSI_COLOR_BRIGHT_RED
+			   "  %-8s"
 			   ANSI_COLOR_RESET
 			   " : "
 			   ANSI_COLOR_BRIGHT_CYAN
-			   "%d"
+			   "%6d"
 			   ANSI_COLOR_RESET
-			   " \n",
-			   app.name, pid);
+			   " : %s\n",
+			   "stopped", pid, app.name);
 	}
 }
 
@@ -677,8 +677,9 @@ void start(const app_t app)
 		usleep(300000);
 	}
 
-	printf("  %-20s : " ANSI_COLOR_BRIGHT_GREEN
-		   "started" ANSI_COLOR_RESET "\n", app.name);
+	printf(ANSI_COLOR_BRIGHT_GREEN "  %-8s"
+		   ANSI_COLOR_RESET	" : %s\n",
+		   "started", app.name);
 }
 
 
@@ -716,13 +717,14 @@ void stop(const app_t app)
 	}
 
 	if (killed) {
-		printf("  %-20s : " ANSI_COLOR_BRIGHT_YELLOW
-			   "killed" ANSI_COLOR_RESET "\n", app.name);
+		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-8s"
+			   ANSI_COLOR_RESET " : %s\n",
+			   "killed", app.name);
 	}
 	else {
-		printf("  %-20s : " ANSI_COLOR_BRIGHT_RED
-			   "cannot kill in 5 seconds"
-			   ANSI_COLOR_RESET "\n", app.name);
+		printf(ANSI_COLOR_BRIGHT_RED "  %s"
+			   ANSI_COLOR_RESET	" : %s\n",
+			   "cannot kill in 5 seconds", app.name);
 	}
 }
 
