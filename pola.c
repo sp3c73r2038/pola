@@ -344,7 +344,7 @@ void spawn_missing_children(const app_t app, process_t * children, int * fds)
 		memset(&children[i], 0, sizeof(process_t));
 		run_child(app.command, app.user, &children[i]);
 		fds[i] = children[i].fd;
-		sleep(app.interval * 1000); /* milliseconds */
+		usleep(app.interval * 1000); /* milliseconds */
 		break;
 	}
 }
@@ -358,7 +358,7 @@ void reap_children(const app_t app, process_t * children, int * fds)
 		perror("waitpid()");
 	}
 	else if (p == 0) {
-		sleep(1);
+		usleep(app.interval * 1000) /* milliseconds */;
 	}
 	else {
 		for (unsigned int i = 0; i < app.proc_num; i++) {
@@ -718,10 +718,10 @@ void stop(const app_t app)
 	int killed = 0;
 
 	if (pid > 0 && pid_alive(pid)) {
-		for (int cnt = 0; cnt < 5; cnt++) {
+		for (int cnt = 0; cnt < 25; cnt++) {
 			/* TODO: stopsig */
 			kill(pid, SIGTERM);
-			usleep(300000);
+			usleep(200000);
 			if (!pid_alive(pid)) {
 				killed = 1;
 				break;
