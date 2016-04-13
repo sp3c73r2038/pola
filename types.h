@@ -4,7 +4,7 @@ typedef struct {
 	char dir[2048];
 	char log_dir[2048];
 	char apps[2048];
-	unsigned int sleep;
+	unsigned int interval;
 } config_t;
 
 typedef struct {

@@ -344,7 +344,7 @@ void spawn_missing_children(const app_t app, process_t * children, int * fds)
 		memset(&children[i], 0, sizeof(process_t));
 		run_child(app.command, app.user, &children[i]);
 		fds[i] = children[i].fd;
-		sleep(app.interval);
+		sleep(app.interval * 1000); /* milliseconds */
 		break;
 	}
 }
@@ -412,6 +412,10 @@ void read_config(const char * path)
 	char key[1024] = {'\0'};
 	char value[8192] = {'\0'};
 
+
+	/* default interval */
+	config.interval = 100;
+
 	while (fgets(buf, sizeof(buf), fh)) {
 		line = trim(buf);
 		if (line == NULL || !strcmp("", line))
@@ -422,14 +426,22 @@ void read_config(const char * path)
 		if (!strcmp("dir", key)) {
 			char *s = trim(value);
 			snprintf(config.dir, strlen(s) + 1, "%s", s);
+			continue;
 		}
 		if (!strcmp("log_dir", key)) {
 			char *s = trim(value);
 			snprintf(config.log_dir, strlen(s) + 1, "%s", s);
+			continue;
 		}
 		if (!strcmp("apps", key)) {
 			char *s = trim(value);
 			snprintf(config.apps, strlen(s) + 1, "%s", s);
+			continue;
+		}
+		if (!strcmp("interval", key)) {
+			unsigned int interval = 100;
+			sscanf(value, "%u", &interval);
+			config.interval = interval;
 		}
 	}
 
@@ -508,7 +520,7 @@ void read_app_config(const char * path, app_t * app)
 			continue;
 		}
 		if (!strcmp("interval", key)) {
-			unsigned int interval = 1;
+			unsigned int interval = 100;
 			sscanf(value, "%u", &interval);
 			app->interval = interval;
 			continue;
@@ -521,6 +533,10 @@ void read_app_config(const char * path, app_t * app)
 		char filename[2048] = {'\0'};
 		snprintf(filename, strlen(app->name) + 5, "%s.out", app->name);
 		path_join((char *) POLA_LOG_DIR, filename, app->out_file);
+	}
+
+	if (app->interval == 0) {
+		app->interval = config.interval;
 	}
 
 	/*
