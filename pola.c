@@ -184,13 +184,13 @@ void signal_handler(int sig) {
 
 	if (sig == SIGHUP) {
 		signal(SIGHUP, signal_handler);
-		printf("HUP dectectd!\n");
+		printf("[%s] HUP dectectd!\n", sys_argv[0]);
 		redirect_stdio(current_app.out_file, current_app.err_file);
 		sig_handling = 0;
 	}
 	if (sig == SIGTERM) {
 		signal(SIGTERM, signal_handler);
-		printf("TERM dectectd!\n");
+		printf("[%s] TERM dectectd!\n", sys_argv[0]);
 
 		pid_t pid = getpid();
 		/* stopsig */
