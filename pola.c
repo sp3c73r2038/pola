@@ -44,6 +44,7 @@
 static config_t config;
 static app_t current_app;
 static char ** sys_argv;
+static int sig_handling = 0;
 
 void signal_handlers(int sig);
 void read_output(const int fd);
@@ -174,10 +175,18 @@ void redirect_stdio(const char * out, const char * err) {
 }
 
 void signal_handler(int sig) {
+
+	if (sig_handling == 1) {
+		// avoid duplicate handling signals
+		return;
+	}
+	sig_handling = 1;
+
 	if (sig == SIGHUP) {
 		signal(SIGHUP, signal_handler);
 		printf("HUP dectectd!\n");
 		redirect_stdio(current_app.out_file, current_app.err_file);
+		sig_handling = 0;
 	}
 	if (sig == SIGTERM) {
 		signal(SIGTERM, signal_handler);
@@ -188,6 +197,7 @@ void signal_handler(int sig) {
 		kill(-pid, SIGTERM);
 		int status = 0;
 		waitpid(0, &status, 0);
+		sig_handling = 0;
 		exit(0);
 	}
 }
