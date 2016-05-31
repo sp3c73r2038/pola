@@ -16,8 +16,11 @@
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
+#include <utime.h>
 #include <wait.h>
+
 
 #include "config.h"
 #include "types.h"
@@ -558,6 +561,87 @@ void read_app_config(const char * path, app_t * app)
 	*/
 }
 
+void touch_pid_file(const char * filename) {
+	time_t now = time(NULL);
+
+	struct utimbuf ubuf;
+
+	ubuf.actime = now;
+	ubuf.modtime = now;
+
+	utime(filename, &ubuf);
+}
+
+int last_mtime(const char * filename, char * p)
+{
+
+	struct stat s;
+	int status;
+	int delta = 0;
+	time_t now;
+	status = stat(filename, &s);
+
+	if (status > 0) {
+		return status;
+	}
+
+	now = time(NULL);
+
+	delta = now - s.st_mtime;
+	// printf("delta: %d\n", delta);
+
+	if (delta <= 0) {
+		return 1;
+	}
+
+	if (delta == 1) {
+		snprintf(p, 13, "   1 second");
+		return 0;
+	}
+
+	if (delta < 60) {
+		snprintf(p, 13, "%4d seconds", delta);
+		return 0;
+	}
+
+	if (delta < 120) {
+		snprintf(p, 13, "   1 minute");
+		return 0;
+	}
+
+	if (delta < 3600) {
+		snprintf(p, 13, "%4d minutes", delta / 60);
+		return 0;
+	}
+
+	if (delta < 7200) {
+		snprintf(p, 13, "   1 hour");
+		return 0;
+	}
+
+	if (delta < 86400) {
+		snprintf(p, 13, "%4d hours", delta / 3600);
+		return 0;
+	}
+
+	if (delta < 86400 * 2) {
+		snprintf(p, 13, "   1 day");
+		return 0;
+	}
+
+	if (delta <= 604800) {
+		snprintf(p, 13, "%4d days", delta / 86400);
+		return 0;
+	}
+
+	if (delta > 86400 * 14) {
+		snprintf(p, 13, "%4d weeks", delta / 604800);
+		return 0;
+	}
+
+	return 0;
+}
+
 
 pid_t read_pidfile(const char * filename)
 {
@@ -608,6 +692,7 @@ void write_pidfile(const char * filename, pid_t pid)
 void status(const app_t app)
 {
 	char pid_fname[4096] = {'\0'};
+	char mtime_buf[12] = {'\0'};
 	get_pid_filename(app, pid_fname);
 
 	int p = access(pid_fname, R_OK);
@@ -619,30 +704,34 @@ void status(const app_t app)
 		return;
 	}
 
+	last_mtime(pid_fname, mtime_buf);
+
 	pid_t pid = read_pidfile(pid_fname);
 
 	if (pid > 0 && pid_alive(pid)) {
 		printf(ANSI_COLOR_BRIGHT_GREEN
-			   "  %-8s"
+			   "  %-7s"
 			   ANSI_COLOR_RESET
-			   " : "
+			   " : %12s : "
 			   ANSI_COLOR_BRIGHT_CYAN
 			   "%6d"
 			   ANSI_COLOR_RESET
 			   " : %s\n",
 			   "running",
+			   mtime_buf,
 			   pid, app.name);
 	}
 	else {
 		printf(ANSI_COLOR_BRIGHT_RED
-			   "  %-8s"
+			   "  %-7s"
 			   ANSI_COLOR_RESET
-			   " : "
+			   " : %12s : "
 			   ANSI_COLOR_BRIGHT_CYAN
 			   "%6d"
 			   ANSI_COLOR_RESET
 			   " : %s\n",
-			   "stopped", pid, app.name);
+			   "stopped",
+			   mtime_buf, pid, app.name);
 	}
 }
 
@@ -743,6 +832,7 @@ void stop(const app_t app)
 	}
 
 	if (killed) {
+		touch_pid_file(pid_fname);
 		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-8s"
 			   ANSI_COLOR_RESET " : %s\n",
 			   "killed", app.name);
@@ -769,8 +859,8 @@ void hup(const app_t app)
 
 	if (pid > 0 && pid_alive(pid)) {
 		kill(pid, SIGHUP);
+		printf("  hup signal sent to %s\n", app.name);
 	}
-	printf("  hup signal sent to %s\n", app.name);
 }
 
 
