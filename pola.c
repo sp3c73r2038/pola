@@ -792,7 +792,7 @@ void start(const app_t app)
 		usleep(300000);
 	}
 
-	printf(ANSI_COLOR_BRIGHT_GREEN "  %-8s"
+	printf(ANSI_COLOR_BRIGHT_GREEN "  %-7s"
 		   ANSI_COLOR_RESET	" : %s\n",
 		   "started", app.name);
 }
@@ -833,7 +833,7 @@ void stop(const app_t app)
 
 	if (killed) {
 		touch_pid_file(pid_fname);
-		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-8s"
+		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-7s"
 			   ANSI_COLOR_RESET " : %s\n",
 			   "killed", app.name);
 	}
