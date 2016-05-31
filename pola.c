@@ -878,10 +878,28 @@ void tail(const app_t app)
 
 void info(const app_t app)
 {
+	char pid_fname[4096] = {'\0'};
+	char dt_buf[20] = {'\0'};
+	int status = 0;
+	struct stat s;
+	time_t t;
+
+
+	get_pid_filename(app, pid_fname);
+
 	printf("  name: %s\n", app.name);
 	printf("  out_file: %s\n", app.out_file);
+	printf("  pid_file: %s\n", pid_fname);
 	printf("  user: %s\n", app.user);
 	printf("  interval: %d\n", app.interval);
+
+	stat(pid_fname, &s);
+	if (status == 0) {
+		t = (time_t)s.st_mtime;
+		strftime(dt_buf, 20, "%Y-%m-%d %H:%M:%S", localtime(&t));
+		printf("  pid_file mtime: %s\n", dt_buf);
+	}
+
 }
 
 void help()
