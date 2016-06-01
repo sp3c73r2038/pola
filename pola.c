@@ -377,6 +377,7 @@ void reap_children(const app_t app, process_t * children, int * fds)
 		for (unsigned int i = 0; i < app.proc_num; i++) {
 			if (p != children[i].pid) continue;
 			printf("child %d exited\n", p);
+			close(children[i].fd);
 			children[i].fd = 0;
 			children[i].pid = 0;
 			fds[i] = 0;
