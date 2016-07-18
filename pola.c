@@ -692,7 +692,9 @@ void write_pidfile(const char * filename, pid_t pid)
 
 void status(const app_t app)
 {
-	char pid_fname[4096] = {'\0'};
+	char * pid_fname;
+	pid_fname = (char *)malloc((1024 + 1) * sizeof(char));
+
 	char mtime_buf[12] = {'\0'};
 	get_pid_filename(app, pid_fname);
 
@@ -702,7 +704,7 @@ void status(const app_t app)
 		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-8s "
 			   ANSI_COLOR_RESET ": %s\n",
 			   "new", app.name);
-		return;
+		goto exit;
 	}
 
 	last_mtime(pid_fname, mtime_buf);
@@ -734,6 +736,11 @@ void status(const app_t app)
 			   "stopped",
 			   mtime_buf, pid, app.name);
 	}
+
+	goto exit;
+
+exit:
+	free(pid_fname);
 }
 
 
@@ -1031,6 +1038,7 @@ int main(int argc, const char ** argv)
 		}
 	}
 	printf("\n");
+	globfree(&result);
 
 	return 0;
 }
