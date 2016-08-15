@@ -671,13 +671,13 @@ int last_mtime(const char * filename, char * p)
 		return 0;
 	}
 
-	if (delta <= 604800) {
+	if (delta <= 86400 * 14) {
 		snprintf(p, 13, "%4d days", delta / 86400);
 		return 0;
 	}
 
 	if (delta > 86400 * 14) {
-		snprintf(p, 13, "%4d weeks", delta / 604800);
+		snprintf(p, 13, "%4d weeks", delta / (86400 * 7));
 		return 0;
 	}
 
