@@ -16,16 +16,15 @@
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include <utime.h>
-#include <wait.h>
 
 
 #include "config.h"
 #include "types.h"
 #include "util/util.h"
-
 
 
 #define ANSI_COLOR_BRIGHT_RED "\x1b[1;31m"
@@ -236,7 +235,9 @@ void run_child(const char * command, const char * user, process_t * p)
 
 		clear_signal();
 
-		char locale[32] = {'\0'};
+		char * locale;
+		locale = (char *)malloc((32 + 1) * sizeof(char));
+		memset(locale, '\0', 32 + 1);
 
 		ensure_locale(locale);
 
@@ -246,9 +247,15 @@ void run_child(const char * command, const char * user, process_t * p)
 		close(fd[1]);
 
 		char * env[5];
-		char env_user[128] = {'\0'};
-		char env_login[128] = {'\0'};
-		char env_home[1024] = {'\0'};
+		char * env_user;
+		char * env_login;
+		char * env_home;
+		env_user = (char *)malloc((128 + 1) * sizeof(char));
+		memset(env_user, '\0', 128 + 1);
+		env_login = (char *)malloc((128 + 1) * sizeof(char));
+		memset(env_login, '\0', 128 + 1);
+		env_home = (char *)malloc((1024 + 1) * sizeof(char));
+		memset(env_home, '\0', 1024 + 1);
 		env[0] = env_user;
 		env[1] = env_login;
 		env[2] = env_home;
@@ -256,6 +263,8 @@ void run_child(const char * command, const char * user, process_t * p)
 		env[4] = NULL;
 
 		switch_user(user, env);
+
+		printf("command: %s\n", command);
 
 		execle("/bin/sh", "sh", "-c", command, (char *) 0, env);
 		perror("exec error\n");
@@ -273,35 +282,46 @@ void run_child(const char * command, const char * user, process_t * p)
 
 void get_pid_filename(app_t app, char * result)
 {
-	char filename[4096] = {'\0'};
+	int s = 4096;
+	char * filename;
+	filename = (char *)malloc((s + 1) * sizeof(char));
+	memset(filename, '\0', s + 1);
 	snprintf(filename, strlen(app.name) + 5, "%s.pid", app.name);
 	path_join((char *)POLA_DIR, filename, result);
+	free(filename);
 }
 
 void read_output(int fd)
 {
-	char buf[8192] = {'\0'};
+	int s = 8192;
+	char * buf;
+	buf = (char *)malloc((s + 1) * sizeof(char));
+	memset(buf, '\0', s + 1);
 	int f = 0;
 
 	while (1) {
-		f = readline(fd, buf, sizeof(buf));
+		f = readline(fd, buf, s);
 
 		switch (f) {
 		case 0 :
 			/* end */
-			return;
+			goto end;
 			break;
 		case -1:
 			usleep(1000);
-			return;
-
+			goto end;
+			break;
 		default:
 			;
-			if (strlen(buf) <= 0) return;
+			if (strlen(buf) <= 0) goto end;
 			printf("%s", buf);
 			break;
 		}
 	}
+
+end:
+	free(buf);
+	return;
 }
 
 void children_io(int * fds, size_t count)
@@ -422,19 +442,28 @@ void read_config(const char * path)
 	}
 
 	char * line = NULL;
-	char buf[8192] = {'\0'};
-	char key[1024] = {'\0'};
-	char value[8192] = {'\0'};
+	char * buf;
+	char * key;
+	char * value;
+	int line_size = 8192;
+	buf = (char *)malloc((line_size + 1) * sizeof(char));
+	memset(buf, '\0', line_size + 1);
+	key = (char *)malloc((1024 + 1) * sizeof(char));
+	memset(key, '\0', 1024 + 1);
+	value = (char *)malloc((8192 + 1) * sizeof(char));
+	memset(value, '\0', 8192 + 1);
 
 
 	/* default interval */
 	config.interval = 100;
 
-	while (fgets(buf, sizeof(buf), fh)) {
+	while (fgets(buf, line_size, fh)) {
 		line = trim(buf);
 		if (line == NULL || !strcmp("", line))
 			continue;
 
+		memset(key, '\0', 1024 + 1);
+		memset(value, '\0', 8192 + 1);
 		sscanf(line, "%[^= ] = %[^\n]", key, value);
 
 		if (!strcmp("dir", key)) {
@@ -458,6 +487,10 @@ void read_config(const char * path)
 			config.interval = interval;
 		}
 	}
+
+	free(buf);
+	free(key);
+	free(value);
 
 	fclose(fh);
 
@@ -487,7 +520,9 @@ void read_app_config(const char * path, app_t * app)
 	snprintf(app->user, 1, "%s", "");
 
 	if (access(path, R_OK) == -1) {
-		char err_msg[1024] = {'\0'};
+		char * err_msg;
+		err_msg = (char *)malloc((1024 + 1) * sizeof(char));
+		memset(err_msg, '\0', 1024 + 1);
 		snprintf(err_msg, strlen(path) + 20,
 				 "cannot read config %s", f);
 		perror(err_msg);
@@ -496,14 +531,21 @@ void read_app_config(const char * path, app_t * app)
 	FILE *fh = fopen(path, "r");
 
 	char * line = NULL;
-	char buf[8192] = {'\0'};
-	while (fgets(buf, sizeof(buf), fh)) {
+	char * buf;
+	char * key;
+	char * value;
+	int line_size = 8192;
+	buf = (char *)malloc((line_size + 1) * sizeof(char));
+	memset(buf, '\0', line_size + 1);
+	key = (char *)malloc((1024 + 1) * sizeof(char));
+	memset(key, '\0', 1024 + 1);
+	value = (char *)malloc((8192 + 1) * sizeof(char));
+	memset(value, '\0', 8192 + 1);
+
+	while (fgets(buf, line_size, fh)) {
 		line = trim(buf);
 		if (line == NULL || !strcmp("", line))
 			continue;
-
-		char key[1024] = {'\0'};
-		char value[8192] = {'\0'};
 
 		sscanf(line, "%[^= ] = %[^\n]", key, value);
 
@@ -541,25 +583,24 @@ void read_app_config(const char * path, app_t * app)
 		}
 
 	}
+	free(buf);
+	free(key);
+	free(value);
 	fclose(fh);
 
 	if (!strcmp("", app->out_file)) {
-		char filename[2048] = {'\0'};
+		char * filename;
+		filename = (char *)malloc((2048 + 1) * sizeof(char));
+		memset(filename, '\0', 2048 + 1);
 		snprintf(filename, strlen(app->name) + 5, "%s.out", app->name);
 		path_join((char *) POLA_LOG_DIR, filename, app->out_file);
+		free(filename);
 	}
 
 	if (app->interval == 0) {
 		app->interval = config.interval;
 	}
 
-	/*
-	  if (!strcmp("", app->err_file)) {
-	  char filename[2048] = {'\0'};
-	  snprintf(filename, strlen(app->name) + 5, "%s.err", app->name);
-	  path_join((char *) POLA_LOG_DIR, filename, app->err_file);
-	  }
-	*/
 }
 
 void touch_pid_file(const char * filename) {
@@ -666,7 +707,9 @@ pid_t read_pidfile(const char * filename)
 		exit(1);
 	}
 
-	char buf[size];
+	char * buf;
+	buf = (char *)malloc((size + 1) * sizeof(char));
+	memset(buf, '\0', size + 1);
 	if (size != read(fd, buf, size)) {
 		perror("read()");
 		exit(1);
@@ -675,18 +718,23 @@ pid_t read_pidfile(const char * filename)
 	pid_t pid = 0;
 	sscanf(buf, "%d", &pid);
 	close(fd);
+	free(buf);
 	return pid;
 }
 
 
 void write_pidfile(const char * filename, pid_t pid)
 {
-	char buf[32] = {'\0'};
-	snprintf(buf, 32, "%d", pid);
+	int s = 32;
+	char * buf;
+	buf = (char *)malloc((s + 1) * sizeof(buf));
+	memset(buf, '\0', s + 1);
+	snprintf(buf, s, "%d", pid);
 	int fd = open(filename, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
 	if (fd < 0) perror("write_pidfile open()");
-	write(fd, buf, 32);
+	write(fd, buf, s);
 	close(fd);
+	free(buf);
 }
 
 
@@ -695,7 +743,9 @@ void status(const app_t app)
 	char * pid_fname;
 	pid_fname = (char *)malloc((1024 + 1) * sizeof(char));
 
-	char mtime_buf[12] = {'\0'};
+	char * mtime_buf;
+	mtime_buf = (char *)malloc((12 + 1) * sizeof(char));
+	memset(mtime_buf, '\0', 12 + 1);
 	get_pid_filename(app, pid_fname);
 
 	int p = access(pid_fname, R_OK);
@@ -773,9 +823,12 @@ void run_daemon(app_t app)
 	handle_signals();
 	redirect_stdio(app.out_file, app.err_file);
 
-	char pid_fname[4096] = {'\0'};
+	char * pid_fname;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(char));
+	memset(pid_fname, '\0', 4096 + 1);
 	get_pid_filename(app, pid_fname);
 	write_pidfile(pid_fname, getpid());
+	free(pid_fname);
 
 	setproctitle(sys_argv[0], app.name);
 
@@ -790,9 +843,12 @@ void start(const app_t app)
 		exit(1);
 	}
 
-	char pid_fname[4096] = {'\0'};
+	char * pid_fname;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(char));
+	memset(pid_fname, '\0', 4096 + 1);
 	get_pid_filename(app, pid_fname);
 	pid_t pid = read_pidfile(pid_fname);
+	free(pid_fname);
 
 	if (pid == -1 || !pid_alive(pid)) {
 		current_app = app;
@@ -819,9 +875,12 @@ void stop(const app_t app)
 		exit(1);
 	}
 
-	char pid_fname[4096] = {'\0'};
+	char * pid_fname;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(char));
+	memset(pid_fname, '\0', 4096 + 1);
 	get_pid_filename(app, pid_fname);
 	pid_t pid = read_pidfile(pid_fname);
+	free(pid_fname);
 	int killed = 0;
 
 	if (pid > 0 && pid_alive(pid)) {
@@ -861,9 +920,12 @@ void restart(const app_t app)
 
 void hup(const app_t app)
 {
-	char pid_fname[4096] = {'\0'};
+	char * pid_fname;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(pid_fname));
+	memset(pid_fname, '\0', 4096 + 1);
 	get_pid_filename(app, pid_fname);
 	pid_t pid = read_pidfile(pid_fname);
+	free(pid_fname);
 
 	if (pid > 0 && pid_alive(pid)) {
 		kill(pid, SIGHUP);
@@ -874,7 +936,9 @@ void hup(const app_t app)
 
 void tail(const app_t app)
 {
-	char command[8192] = {'\0'};
+	char * command;
+	command = (char *)malloc((8192 + 1) * sizeof(char));
+	memset(command, '\0', 8192 + 1);
 	snprintf(
 		command,
 		strlen(app.out_file) + 31,
@@ -886,8 +950,12 @@ void tail(const app_t app)
 
 void info(const app_t app)
 {
-	char pid_fname[4096] = {'\0'};
-	char dt_buf[20] = {'\0'};
+	char * pid_fname;
+	char * dt_buf;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(pid_fname));
+	memset(pid_fname, '\0', 4096 + 1);
+	dt_buf = (char *)malloc((20 + 1) * sizeof(char)) ;
+	memset(dt_buf, '\0', 20 +1);
 	int status = 0;
 	struct stat s;
 	time_t t;
@@ -907,7 +975,8 @@ void info(const app_t app)
 		strftime(dt_buf, 20, "%Y-%m-%d %H:%M:%S", localtime(&t));
 		printf("  pid_file mtime: %s\n", dt_buf);
 	}
-
+	free(pid_fname);
+	free(dt_buf);
 }
 
 void help()

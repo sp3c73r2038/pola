@@ -47,13 +47,17 @@ char *trim(char *s)
 void path_join(char * path, char * filename, char *result)
 {
 
-	char tmp[1024] = {'\0'};
+	int s = 1024;
+	char * tmp;
+	tmp = (char *)malloc((s + 1) * sizeof(char));
+	memset(tmp, '\0', s + 1);
 	snprintf(tmp, strlen(path) + 3, "%s/1", path);
 
-	char * p = dirname((char *) tmp);
+	char * p = dirname(tmp);
 
 	snprintf(result, strlen(p) + strlen(filename) + 2,
 			 "%s/%s", p, filename);
+	free(tmp);
 }
 
 
