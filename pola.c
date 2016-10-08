@@ -6,7 +6,10 @@
 #include <glob.h>
 #include <libgen.h>
 #include <locale.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <errno.h>
+#include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdio.h>
@@ -14,6 +17,7 @@
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -41,17 +45,119 @@
 #define ANSI_COLOR_CYAN "\x1b[36m"
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define DEFAULT_LOCALE "en_US.UTF-8"
+#define HEARTBEAT_INTERVAL_DEFAULT 5000000
 
 
 static config_t config;
 static app_t current_app;
 static char ** sys_argv;
 static int sig_handling = 0;
+static int metric_running = 0;
+static pthread_t metric_p = NULL;
 
 void signal_handlers(int sig);
 void read_output(const int fd);
 void children_io(int * fds, size_t count);
+void * cleanup_metric_flag();
+void * metric_thread(void *);
+int send_udp_msg(const char *, const int, const char *);
 
+void * metric_thread(void * args)
+{
+	app_t * app = (app_t *) args;
+	pthread_cleanup_push(cleanup_metric_flag, NULL);
+	time_t now;
+	char * msg = (char *)malloc((256 + 1) * sizeof(char));
+	char * hostname = (char *)malloc((256 + 1) * sizeof(char));
+	gethostname(hostname, sizeof(hostname));
+
+	while(1) {
+		now = time(NULL);
+		snprintf(
+			msg,
+			13 + strlen(app->name) + strlen(hostname),
+			"%lu,%s,%s",
+			(unsigned long) now,
+			hostname,
+			app->name);
+		send_udp_msg(
+			app->heartbeat_host,
+			app->heartbeat_port,
+			msg);
+		memset(msg, '\0', 256);
+		usleep(app->heartbeat_interval);
+	}
+
+	free(msg);
+	free(hostname);
+
+	pthread_cleanup_pop(NULL);
+	return NULL;
+}
+
+int send_udp_msg(const char* host, const int port, const char* msg)
+{
+	int s = socket(AF_INET, SOCK_DGRAM, 0);
+
+	if (s < 0) {
+		perror("cannot create socket");
+		return -1;
+	}
+
+	struct sockaddr_in myaddr;
+	memset((char *)&myaddr, 0, sizeof(myaddr));
+	myaddr.sin_family = AF_INET;
+	myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	myaddr.sin_port = htons(0);
+
+	int b = bind(
+		s,
+		(struct sockaddr *)&myaddr,
+		sizeof(myaddr));
+
+	if (b < 0) {
+		perror("bind failed");
+		return 0;
+	}
+
+	struct sockaddr_in servaddr;
+	struct hostent *hp;
+
+	memset((char*)&servaddr, 0, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(port);
+
+	hp = gethostbyname(host);
+	if (!hp) {
+		fprintf(stderr, "could not obtain address of %s\n", host);
+		return -1;
+	}
+
+	memcpy((void *)&servaddr.sin_addr, hp->h_addr_list[0], hp->h_length);
+
+	int f = sendto(
+		s,
+		msg,
+		strlen(msg),
+		0,
+		(struct sockaddr *)&servaddr,
+		sizeof(servaddr));
+
+	if (f < 0) {
+		perror("sendto failed");
+		return -1;
+	}
+
+	close(s);
+	return 0;
+}
+
+
+void * cleanup_metric_flag()
+{
+	metric_running = 0;
+	return NULL;
+}
 
 int pid_alive(const pid_t pid)
 {
@@ -69,7 +175,6 @@ int pid_alive(const pid_t pid)
 	perror(strerror(errno));
 	exit(1);
 }
-
 
 void ensure_locale(char * locale)
 {
@@ -518,6 +623,10 @@ void read_app_config(const char * path, app_t * app)
 	app->interval = 0;
 	app->proc_num = 1;
 	snprintf(app->user, 1, "%s", "");
+	app->heartbeat = 0;
+	app->heartbeat_interval = HEARTBEAT_INTERVAL_DEFAULT;
+	snprintf(app->heartbeat_host, 1, "%s", "");
+	app->heartbeat_port = 0;
 
 	if (access(path, R_OK) == -1) {
 		char * err_msg;
@@ -581,6 +690,32 @@ void read_app_config(const char * path, app_t * app)
 			app->interval = interval;
 			continue;
 		}
+		if (!strcmp("heartbeat", key)) {
+			char *s = trim(value);
+			if (
+				!strcmp("yes", s) ||
+				!strcmp("true", s) ||
+				!strcmp("on", s))
+				app->heartbeat = 1;
+			continue;
+		}
+		if (!strcmp("heartbeat_host", key)) {
+			char *s = trim(value);
+			snprintf(app->heartbeat_host, strlen(s) + 1, "%s", s);
+			continue;
+		}
+		if (!strcmp("heartbeat_port", key)) {
+			unsigned int heartbeat_port = 0;
+			sscanf(value, "%u", &heartbeat_port);
+			app->heartbeat_port = heartbeat_port;
+			continue;
+		}
+		if (!strcmp("heartbeat_interval", key)) {
+			unsigned int heartbeat_interval = 0;
+			sscanf(value, "%u", &heartbeat_interval);
+			app->heartbeat_interval = heartbeat_interval;
+			continue;
+		}
 
 	}
 	free(buf);
@@ -599,6 +734,10 @@ void read_app_config(const char * path, app_t * app)
 
 	if (app->interval == 0) {
 		app->interval = config.interval;
+	}
+
+	if (app->heartbeat_interval == 0) {
+		app->heartbeat_interval = HEARTBEAT_INTERVAL_DEFAULT;
 	}
 
 }
@@ -796,6 +935,14 @@ exit:
 
 void run(const app_t app)
 {
+	if (metric_p) {
+		pthread_cancel(metric_p);
+		pthread_join(metric_p, NULL);
+	}
+
+	if (app.heartbeat)
+		pthread_create(&metric_p, NULL, metric_thread, (void *)&app);
+
 	printf("[%s] run: %s\n", sys_argv[0], app.command);
 	master_loop(app);
 }
@@ -896,6 +1043,11 @@ void stop(const app_t app)
 	}
 	else {
 		killed = 1;
+	}
+
+	if (metric_p) {
+		pthread_cancel(metric_p);
+		pthread_join(metric_p, NULL);
 	}
 
 	if (killed) {

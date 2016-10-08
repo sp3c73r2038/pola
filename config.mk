@@ -1,7 +1,7 @@
 # version
 VERSION = 0.0.1
 
-LIBS =
+LIBS = -lpthread
 
 # flags
 CFLAGS := -g -std=c99 -Wpedantic -Wall \

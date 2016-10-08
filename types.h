@@ -15,6 +15,10 @@ typedef struct {
 	char user[128];
 	unsigned int proc_num;
 	unsigned int interval;
+	int heartbeat;
+	char heartbeat_host[256];
+	unsigned int heartbeat_port;
+	unsigned int heartbeat_interval;
 } app_t;
 
 typedef struct {
