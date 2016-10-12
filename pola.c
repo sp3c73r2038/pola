@@ -58,7 +58,7 @@ static pthread_t metric_p = NULL;
 void signal_handlers(int sig);
 void read_output(const int fd);
 void children_io(int * fds, size_t count);
-void * cleanup_metric_flag();
+void cleanup_metric_flag(void *);
 void * metric_thread(void *);
 int send_udp_msg(const char *, const int, const char *);
 
@@ -91,7 +91,7 @@ void * metric_thread(void * args)
 	free(msg);
 	free(hostname);
 
-	pthread_cleanup_pop(NULL);
+	pthread_cleanup_pop(0);
 	return NULL;
 }
 
@@ -153,10 +153,9 @@ int send_udp_msg(const char* host, const int port, const char* msg)
 }
 
 
-void * cleanup_metric_flag()
+void cleanup_metric_flag(void * args)
 {
 	metric_running = 0;
-	return NULL;
 }
 
 int pid_alive(const pid_t pid)
