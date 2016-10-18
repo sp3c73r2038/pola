@@ -534,15 +534,13 @@ void master_loop(const app_t app)
 void read_config(const char * path)
 {
 	if (access(path, R_OK) == -1) {
-		perror("read_config access()");
-		exit(1);
+		goto pola_config_default;
 	}
 
 	FILE *fh = fopen(path, "r");
 
 	if (ferror(fh)) {
-		perror("read_config fopen()");
-		exit(1);
+		goto pola_config_default;
 	}
 
 	char * line = NULL;
@@ -598,6 +596,7 @@ void read_config(const char * path)
 
 	fclose(fh);
 
+pola_config_default:
 	if (!strcmp("", config.dir)) {
 		snprintf(config.dir, strlen(POLA_DIR) + 1, "%s", POLA_DIR);
 	}
