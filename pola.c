@@ -246,12 +246,12 @@ void switch_user(const char * user, char ** env)
 }
 
 void redirect_stdio(const char * out, const char * err) {
-	int logfd = open(out, O_WRONLY | O_CREAT | O_APPEND, 0755);
+	int logfd = open(out, O_WRONLY | O_CREAT | O_APPEND, 0644);
 	int error_logfd = -1;
 	int nullfd = open("/dev/null", O_RDONLY, 0);
 
 	if (err != NULL && strcmp("", err)) {
-		error_logfd = open(err, O_WRONLY | O_CREAT | O_APPEND, 0755);
+		error_logfd = open(err, O_WRONLY | O_CREAT | O_APPEND, 0644);
 	}
 
 	if (logfd == -1) {
