@@ -1,7 +1,7 @@
 # version
 VERSION = 0.0.1
 
-LIBS = -lpthread
+LIBS = -ljson-c -lpthread
 
 # flags
 CFLAGS := -g -std=c99 -Wpedantic -Wall \

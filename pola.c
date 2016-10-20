@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <utime.h>
 
+#include <json-c/json.h>
 
 #include "config.h"
 #include "types.h"
@@ -46,6 +47,7 @@
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define DEFAULT_LOCALE "en_US.UTF-8"
 #define HEARTBEAT_INTERVAL_DEFAULT 5000000
+#define HOSTNAME_BUF_SIZE 256
 
 
 static config_t config;
@@ -67,28 +69,42 @@ void * metric_thread(void * args)
 	app_t * app = (app_t *) args;
 	pthread_cleanup_push(cleanup_metric_flag, NULL);
 	time_t now;
-	char * msg = (char *)malloc((256 + 1) * sizeof(char));
-	char * hostname = (char *)malloc((256 + 1) * sizeof(char));
-	gethostname(hostname, sizeof(hostname));
+	char * hostname = (char *)malloc((HOSTNAME_BUF_SIZE + 1) *
+									 sizeof(char));
+
+	gethostname(hostname, HOSTNAME_BUF_SIZE);
 
 	while(1) {
 		now = time(NULL);
-		snprintf(
-			msg,
-			13 + strlen(app->name) + strlen(hostname),
-			"%lu,%s,%s",
-			(unsigned long) now,
-			hostname,
-			app->name);
+
+		char _[1024] = {'\0'};
+		memset(_, 0, sizeof(char));
+		struct json_object * jobj;
+		jobj = json_object_new_object();
+
+		json_object_object_add(
+			jobj, "timestamp",
+			json_object_new_int((unsigned long) now));
+
+		json_object_object_add(
+			jobj, "hostname",
+			json_object_new_string(hostname));
+
+		json_object_object_add(
+			jobj, "name",
+			json_object_new_string(app->name));
+
+		const char * msg = json_object_to_json_string_ext(
+			jobj, JSON_C_TO_STRING_PRETTY);
+
 		send_udp_msg(
 			app->heartbeat_host,
 			app->heartbeat_port,
 			msg);
-		memset(msg, '\0', 256);
+		json_object_put(jobj);
 		usleep(app->heartbeat_interval);
 	}
 
-	free(msg);
 	free(hostname);
 
 	pthread_cleanup_pop(0);
