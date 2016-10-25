@@ -69,8 +69,8 @@ void * metric_thread(void * args)
 	app_t * app = (app_t *) args;
 	pthread_cleanup_push(cleanup_metric_flag, NULL);
 	time_t now;
-	char * hostname = (char *)malloc((HOSTNAME_BUF_SIZE + 1) *
-									 sizeof(char));
+	char * hostname = (char *)
+		malloc((HOSTNAME_BUF_SIZE + 1) * sizeof(char));
 
 	gethostname(hostname, HOSTNAME_BUF_SIZE);
 
@@ -1077,8 +1077,28 @@ void stop(const app_t app)
 	}
 }
 
-
 void restart(const app_t app)
+{
+	if (access(POLA_DIR, W_OK) == -1) {
+		perror("cannot write to POLA_DIR");
+		exit(1);
+	}
+
+	char * pid_fname;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(char));
+	memset(pid_fname, '\0', 4096 + 1);
+	get_pid_filename(app, pid_fname);
+	pid_t pid = read_pidfile(pid_fname);
+	free(pid_fname);
+
+	if (pid == -1 || pid_alive(pid)) {
+		stop(app);
+		start(app);
+	}
+}
+
+
+void force_restart(const app_t app)
 {
 	stop(app);
 	start(app);
@@ -1155,6 +1175,7 @@ void help()
 	printf("    %s start [app_name]\n", sys_argv[0]);
 	printf("    %s stop [app_name]\n", sys_argv[0]);
 	printf("    %s restart [app_name]\n", sys_argv[0]);
+	printf("    %s force-restart [app_name]\n", sys_argv[0]);
 	printf("    %s hup [app_name]\n", sys_argv[0]);
 	printf("    %s info [app_name]\n", sys_argv[0]);
 	printf("    %s tail app_name\n", sys_argv[0]);
@@ -1219,6 +1240,9 @@ int main(int argc, const char ** argv)
 		}
 		else if (!strcmp("restart", argv[1])) {
 			func = &restart;
+		}
+		else if (!strcmp("force-restart", argv[1])) {
+			func = &force_restart;
 		}
 		else if (!strcmp("hup", argv[1])) {
 			func = &hup;
