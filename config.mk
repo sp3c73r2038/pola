@@ -1,5 +1,5 @@
 # version
-VERSION = 0.0.1
+VERSION = `git rev-parse HEAD | cut -b 1-7`
 
 LIBS = -ljson-c -lpthread
 

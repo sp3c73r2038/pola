@@ -1184,6 +1184,13 @@ void help()
 
 }
 
+void version()
+{
+	printf("\n");
+	printf("  %s version: %s\n", sys_argv[0], VERSION);
+	printf("\n");
+}
+
 void initialize()
 {
 	memset(&config, 0, sizeof(config));
@@ -1269,6 +1276,12 @@ int main(int argc, const char ** argv)
 			exit(1);
 		}
 
+		else if (!strcmp("version", argv[1]) ||
+				 !strcmp("-v", argv[1]) ||
+				 !strcmp("--version", argv[1])) {
+			version();
+			exit(1);
+		}
 		else {
 			fprintf(stderr, "unknown action: %s\n", argv[1]);
 			exit(1);
