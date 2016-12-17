@@ -571,7 +571,6 @@ void read_config(const char * path)
 	value = (char *)malloc((8192 + 1) * sizeof(char));
 	memset(value, '\0', 8192 + 1);
 
-
 	/* default interval */
 	config.interval = 100;
 
@@ -613,6 +612,10 @@ void read_config(const char * path)
 	fclose(fh);
 
 pola_config_default:
+	if (config.interval == 0) {
+		config.interval = 100;
+	}
+
 	if (!strcmp("", config.dir)) {
 		snprintf(config.dir, strlen(POLA_DIR) + 1, "%s", POLA_DIR);
 	}
