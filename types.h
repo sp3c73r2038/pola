@@ -19,6 +19,7 @@ typedef struct {
 	char heartbeat_host[256];
 	unsigned int heartbeat_port;
 	unsigned int heartbeat_interval;
+	int disabled;
 } app_t;
 
 typedef struct {

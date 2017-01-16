@@ -644,6 +644,7 @@ void read_app_config(const char * path, app_t * app)
 	app->heartbeat_interval = HEARTBEAT_INTERVAL_DEFAULT;
 	snprintf(app->heartbeat_host, 1, "%s", "");
 	app->heartbeat_port = 0;
+	app->disabled = 0;
 
 	if (access(path, R_OK) == -1) {
 		char * err_msg;
@@ -733,7 +734,15 @@ void read_app_config(const char * path, app_t * app)
 			app->heartbeat_interval = heartbeat_interval;
 			continue;
 		}
-
+		if (!strcmp("disabled", key)) {
+			char *s = trim(value);
+			if (
+				!strcmp("yes", s) ||
+				!strcmp("true", s) ||
+				!strcmp("on", s))
+				app->disabled = 1;
+			continue;
+		}
 	}
 	free(buf);
 	free(key);
@@ -917,31 +926,37 @@ void status(const app_t app)
 
 	pid_t pid = read_pidfile(pid_fname);
 
-	if (pid > 0 && pid_alive(pid)) {
-		printf(ANSI_COLOR_BRIGHT_GREEN
-			   "  %-7s"
-			   ANSI_COLOR_RESET
-			   " : %12s : "
-			   ANSI_COLOR_BRIGHT_CYAN
-			   "%6d"
-			   ANSI_COLOR_RESET
-			   " : %s\n",
-			   "running",
-			   mtime_buf,
-			   pid, app.name);
+	char * _status;
+
+	if (app.disabled) {
+		_status = (
+			ANSI_COLOR_BRIGHT_YELLOW
+			"disabled"
+			ANSI_COLOR_RESET
+			);
+	}
+	else if (pid > 0 && pid_alive(pid)) {
+		_status = (
+			ANSI_COLOR_BRIGHT_GREEN
+			"running"
+			ANSI_COLOR_RESET
+			);
 	}
 	else {
-		printf(ANSI_COLOR_BRIGHT_RED
-			   "  %-7s"
-			   ANSI_COLOR_RESET
-			   " : %12s : "
-			   ANSI_COLOR_BRIGHT_CYAN
-			   "%6d"
-			   ANSI_COLOR_RESET
-			   " : %s\n",
-			   "stopped",
-			   mtime_buf, pid, app.name);
+		_status = (
+			ANSI_COLOR_BRIGHT_RED
+			"stopped"
+			ANSI_COLOR_RESET
+			);
 	}
+
+	printf(
+		" %-20s : %12s : "
+		ANSI_COLOR_BRIGHT_CYAN
+		" %6d : "
+		ANSI_COLOR_RESET
+		"%s\n",
+		_status, mtime_buf, pid, app.name);
 
 	goto exit;
 
@@ -1001,10 +1016,19 @@ void run_daemon(app_t app)
 
 void start(const app_t app)
 {
-
 	if (access(POLA_DIR, W_OK) == -1) {
 		perror("cannot write to POLA_DIR");
 		exit(1);
+	}
+
+	if (app.disabled) {
+		printf(
+			ANSI_COLOR_BRIGHT_RED
+			"  disabled, cannot start"
+			ANSI_COLOR_RESET
+			"\n"
+			);
+		return;
 	}
 
 	char * pid_fname;
@@ -1059,6 +1083,15 @@ void stop(const app_t app)
 		}
 	}
 	else {
+		if (app.disabled) {
+			printf(
+				ANSI_COLOR_BRIGHT_RED
+				"  disabled, cannot start"
+				ANSI_COLOR_RESET
+				"\n"
+				);
+			return;
+		}
 		killed = 1;
 	}
 
