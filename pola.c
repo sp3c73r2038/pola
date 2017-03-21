@@ -115,8 +115,11 @@ int send_udp_msg(const char* host, const int port, const char* msg)
 {
 	int s = socket(AF_INET, SOCK_DGRAM, 0);
 
+	int rv = 0;
+
 	if (s < 0) {
 		perror("cannot create socket");
+		/* do not require closing */
 		return -1;
 	}
 
@@ -133,7 +136,8 @@ int send_udp_msg(const char* host, const int port, const char* msg)
 
 	if (b < 0) {
 		perror("bind failed");
-		return 0;
+		rv = -1;
+		goto UDP_END;
 	}
 
 	struct sockaddr_in servaddr;
@@ -146,7 +150,8 @@ int send_udp_msg(const char* host, const int port, const char* msg)
 	hp = gethostbyname(host);
 	if (!hp) {
 		fprintf(stderr, "could not obtain address of %s\n", host);
-		return -1;
+		rv = -1;
+		goto UDP_END;
 	}
 
 	memcpy((void *)&servaddr.sin_addr, hp->h_addr_list[0], hp->h_length);
@@ -161,11 +166,13 @@ int send_udp_msg(const char* host, const int port, const char* msg)
 
 	if (f < 0) {
 		perror("sendto failed");
-		return -1;
+		rv = -1;
+		goto UDP_END;
 	}
 
+UDP_END:
 	close(s);
-	return 0;
+	return rv;
 }
 
 
