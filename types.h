@@ -20,6 +20,9 @@ typedef struct {
 	unsigned int heartbeat_port;
 	unsigned int heartbeat_interval;
 	int disabled;
+	int guard;
+	char guard_pidfile[2048];
+	char guard_pre_start[4096];
 } app_t;
 
 typedef struct {

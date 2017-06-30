@@ -63,6 +63,7 @@ void children_io(int * fds, size_t count);
 void cleanup_metric_flag(void *);
 void * metric_thread(void *);
 int send_udp_msg(const char *, const int, const char *);
+pid_t read_pidfile(const char *);
 
 void * metric_thread(void * args)
 {
@@ -121,6 +122,15 @@ int send_udp_msg(const char* host, const int port, const char* msg)
 		perror("cannot create socket");
 		/* do not require closing */
 		return -1;
+	}
+
+	int reuse = 1;
+	if (setsockopt(
+			s, SOL_SOCKET, SO_REUSEADDR,
+			(const char*)&reuse, sizeof(reuse)) < 0) {
+		perror("setsockopt(SO_REUSEADDR) failed");
+		rv = -1;
+		goto UDP_END;
 	}
 
 	struct sockaddr_in myaddr;
@@ -553,6 +563,59 @@ void master_loop(const app_t app)
 	}
 }
 
+void guard_loop(const app_t app)
+{
+	pid_t prev_pid = 0;
+	pid_t pid = 0;
+	int err_cnt = 0;
+	process_t p;
+	int p_status;
+
+	while (1) {
+		pid = read_pidfile(app.guard_pidfile);
+		if (pid == -1) {
+			printf(
+				"[%s] cannot read pid file, run command %s\n",
+				sys_argv[0],
+				app.command);
+			run_child(app.command, app.user, &p);
+			waitpid(0, &p_status, 0);
+			goto NEXT;
+		}
+		if (pid_alive(pid) == 0) {
+			err_cnt++;
+			printf(
+				"[%s] guard pid %d not alive, cnt %d\n",
+				sys_argv[0],
+				pid,
+				err_cnt);
+		}
+		if (err_cnt >= 3) {
+			err_cnt = 0;
+			printf(
+				"[%s] guard err count exceeded, run command %s\n",
+				sys_argv[0],
+				app.command);
+			run_child(app.command, app.user, &p);
+			waitpid(0, &p_status, 0);
+		}
+
+		if (prev_pid == 0) {
+			prev_pid = pid;
+		}
+		else {
+			if (pid != prev_pid) {
+				printf(
+					"[%s] guard pid has changed to %d\n",
+					sys_argv[0],
+					pid);
+				prev_pid = pid;
+			}
+		}
+	NEXT:
+		usleep(app.interval * 1000);
+	}
+}
 
 void read_config(const char * path)
 {
@@ -652,6 +715,9 @@ void read_app_config(const char * path, app_t * app)
 	snprintf(app->heartbeat_host, 1, "%s", "");
 	app->heartbeat_port = 0;
 	app->disabled = 0;
+	app->guard = 0;
+	snprintf(app->guard_pidfile, 1, "%s", "");
+	snprintf(app->guard_pre_start, 1, "%s", "");
 
 	if (access(path, R_OK) == -1) {
 		char * err_msg;
@@ -748,6 +814,25 @@ void read_app_config(const char * path, app_t * app)
 				!strcmp("true", s) ||
 				!strcmp("on", s))
 				app->disabled = 1;
+			continue;
+		}
+		if (!strcmp("guard", key)) {
+			char *s = trim(value);
+			if (
+				!strcmp("yes", s) ||
+				!strcmp("true", s) ||
+				!strcmp("on", s))
+				app->guard = 1;
+			continue;
+		}
+		if (!strcmp("guard_pidfile", key)) {
+			char *s = trim(value);
+			snprintf(app->guard_pidfile, strlen(s) + 1, "%s", s);
+			continue;
+		}
+		if (!strcmp("guard_pre_start", key)) {
+			char *s = trim(value);
+			snprintf(app->guard_pre_start, strlen(s) + 1, "%s", s);
 			continue;
 		}
 	}
@@ -982,8 +1067,15 @@ void run(const app_t app)
 	if (app.heartbeat)
 		pthread_create(&metric_p, NULL, metric_thread, (void *)&app);
 
-	printf("[%s] run: %s\n", sys_argv[0], app.command);
-	master_loop(app);
+
+	if (app.guard == 1) {
+		printf("[%s] guard: %s\n", sys_argv[0], app.guard_pidfile);
+		guard_loop(app);
+	}
+	else {
+		printf("[%s] run: %s\n", sys_argv[0], app.command);
+		master_loop(app);
+	}
 }
 
 void run_daemon(app_t app)
@@ -1044,6 +1136,20 @@ void start(const app_t app)
 	get_pid_filename(app, pid_fname);
 	pid_t pid = read_pidfile(pid_fname);
 	free(pid_fname);
+
+	if (app.guard == 1) {
+		if (strcmp("", app.guard_pidfile) == 0) {
+			printf(
+				ANSI_COLOR_BRIGHT_RED
+				"  missing guard_pidfile config when using guard"
+				ANSI_COLOR_RESET
+				"\n"
+				);
+			return;
+		}
+		current_app = app;
+		usleep(300000);
+	}
 
 	if (pid == -1 || !pid_alive(pid)) {
 		current_app = app;
@@ -1197,13 +1303,19 @@ void info(const app_t app)
 	printf("  pid_file: %s\n", pid_fname);
 	printf("  user: %s\n", app.user);
 	printf("  interval: %d\n", app.interval);
-
 	stat(pid_fname, &s);
 	if (status == 0) {
 		t = (time_t)s.st_mtime;
 		strftime(dt_buf, 20, "%Y-%m-%d %H:%M:%S", localtime(&t));
 		printf("  pid_file mtime: %s\n", dt_buf);
 	}
+	printf("  heartbeat: %d\n", app.heartbeat);
+	printf("  heartbeat_host: %s\n", app.heartbeat_host);
+	printf("  heartbeat_port: %d\n", app.heartbeat_port);
+	printf("  heartbeat_interval: %d\n", app.heartbeat_interval);
+	printf("  guard: %d\n", app.guard);
+	printf("  guard_pidfile: %s\n", app.guard_pidfile);
+	printf("  guard_pre_start: %s\n", app.guard_pre_start);
 	free(pid_fname);
 	free(dt_buf);
 }
@@ -1265,7 +1377,7 @@ int main(int argc, const char ** argv)
 			app_t app;
 			memset(&app, 0, sizeof(app_t));
 			snprintf(app.command, strlen(argv[2]) + 1,
-					"%s", argv[2]);
+					 "%s", argv[2]);
 			app.proc_num = 1;
 			app.interval = 1;
 			run(app);
