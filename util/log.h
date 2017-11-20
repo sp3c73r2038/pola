@@ -1,0 +1,12 @@
+//LOG LEVELS
+typedef enum
+{
+	LOG_DEBUG,
+	LOG_DEFAULT,
+	LOG_INFO,
+	LOG_ERROR,
+} LOG_LEVEL;
+
+void LOG_TRACE(LOG_LEVEL lvl, char *fmt, ... );
+void SET_LOG_LEVEL(LOG_LEVEL lvl);
+LOG_LEVEL GET_LOG_LEVEL();

@@ -55,7 +55,8 @@ static app_t current_app;
 static char ** sys_argv;
 static int sig_handling = 0;
 static int metric_running = 0;
-static pthread_t metric_p = NULL;
+static pthread_t metric_p = 0;
+static unsigned int daemon_flag = 0;
 
 void signal_handlers(int sig);
 void read_output(const int fd);
@@ -323,13 +324,36 @@ void signal_handler(int sig) {
 
 	if (sig == SIGHUP) {
 		signal(SIGHUP, signal_handler);
-		printf("[%s] HUP dectectd!\n", sys_argv[0]);
+		// printf("[%s] SIGHUP dectectd!\n", sys_argv[0]);
+		LOG_TRACE(LOG_INFO, "[%s] SIGHUP dectectd!\n", sys_argv[0]);
 		redirect_stdio(current_app.out_file, current_app.err_file);
 		sig_handling = 0;
 	}
 	if (sig == SIGTERM) {
 		signal(SIGTERM, signal_handler);
-		printf("[%s] TERM dectectd!\n", sys_argv[0]);
+		// printf("[%s] SIGTERM dectectd!\n", sys_argv[0]);
+		LOG_TRACE(LOG_INFO, "[%s] SIGTERM dectectd!\n", sys_argv[0]);
+
+		if (current_app.ignore_term > 0) {
+			// printf("[%s] ignore SIGTERM\n", sys_argv[0]);
+			LOG_TRACE(
+				LOG_INFO, "[%s] ignore SIGTERM\n", sys_argv[0]);
+			sig_handling = 0;
+			return;
+		}
+
+		pid_t pid = getpid();
+		/* stopsig */
+		kill(-pid, SIGTERM);
+		int status = 0;
+		waitpid(0, &status, 0);
+		sig_handling = 0;
+		exit(0);
+	}
+	if (sig == SIGQUIT) {
+		signal(SIGTERM, signal_handler);
+		// printf("[%s] SIGQUIT dectectd!\n", sys_argv[0]);
+		LOG_TRACE(LOG_INFO, "[%s] SIGQUIT dectectd!\n", sys_argv[0]);
 
 		pid_t pid = getpid();
 		/* stopsig */
@@ -345,6 +369,7 @@ void signal_handler(int sig) {
 void handle_signals() {
 	signal(SIGHUP, signal_handler);
 	signal(SIGTERM, signal_handler);
+	signal(SIGQUIT, signal_handler);
 }
 
 
@@ -370,7 +395,7 @@ void run_child(const char * command, const char * user, process_t * p)
 	else if (pid == 0) {
 		/* child */
 
-		clear_signal();
+		// clear_signal();
 
 		char * locale;
 		locale = (char *)malloc((32 + 1) * sizeof(char));
@@ -408,6 +433,8 @@ void run_child(const char * command, const char * user, process_t * p)
 		exit(1);
 	}
 
+	// parent
+
 	close(fd[1]);
 
 	int flags = fcntl(fd[0], F_GETFL, 0);
@@ -415,6 +442,10 @@ void run_child(const char * command, const char * user, process_t * p)
 
 	p->fd = fd[0];
 	p->pid = pid;
+
+	if (daemon_flag) {
+		handle_signals();
+	}
 }
 
 void get_pid_filename(app_t app, char * result)
@@ -528,7 +559,7 @@ void reap_children(const app_t app, process_t * children, int * fds)
 		perror("waitpid()");
 	}
 	else if (p == 0) {
-		usleep(app.interval * 1000) /* milliseconds */;
+		usleep(100 * 1000) /* milliseconds */;
 	}
 	else {
 		for (unsigned int i = 0; i < app.proc_num; i++) {
@@ -716,6 +747,7 @@ void read_app_config(const char * path, app_t * app)
 	app->heartbeat_port = 0;
 	app->disabled = 0;
 	app->guard = 0;
+	app->ignore_term = 0;
 	snprintf(app->guard_pidfile, 1, "%s", "");
 	snprintf(app->guard_pre_start, 1, "%s", "");
 
@@ -833,6 +865,12 @@ void read_app_config(const char * path, app_t * app)
 		if (!strcmp("guard_pre_start", key)) {
 			char *s = trim(value);
 			snprintf(app->guard_pre_start, strlen(s) + 1, "%s", s);
+			continue;
+		}
+		if (!strcmp("ignore_term", key)) {
+			unsigned int ignore_term = 0;
+			sscanf(value, "%u", &ignore_term);
+			app->ignore_term = ignore_term;
 			continue;
 		}
 	}
@@ -1098,7 +1136,7 @@ void run_daemon(app_t app)
 		exit(1);
 	}
 
-	handle_signals();
+	// handle_signals();
 	redirect_stdio(app.out_file, app.err_file);
 
 	char * pid_fname;
@@ -1115,6 +1153,9 @@ void run_daemon(app_t app)
 
 void start(const app_t app)
 {
+
+	daemon_flag = 1;
+
 	if (access(POLA_DIR, W_OK) == -1) {
 		perror("cannot write to POLA_DIR");
 		exit(1);
@@ -1187,7 +1228,11 @@ void stop(const app_t app)
 	if (pid > 0 && pid_alive(pid)) {
 		for (int cnt = 0; cnt < 25; cnt++) {
 			/* TODO: stopsig */
-			kill(pid, SIGTERM);
+			int sig = SIGTERM;
+			if (app.ignore_term) {
+				sig = SIGQUIT;
+			}
+			kill(pid, sig);
 			usleep(200000);
 			if (!pid_alive(pid)) {
 				killed = 1;
@@ -1316,6 +1361,7 @@ void info(const app_t app)
 	printf("  guard: %d\n", app.guard);
 	printf("  guard_pidfile: %s\n", app.guard_pidfile);
 	printf("  guard_pre_start: %s\n", app.guard_pre_start);
+	printf("  ignore_term: %d\n", app.ignore_term);
 	free(pid_fname);
 	free(dt_buf);
 }
@@ -1350,6 +1396,7 @@ void initialize()
 {
 	memset(&config, 0, sizeof(config));
 	read_config(POLA_CONFIG);
+	SET_LOG_LEVEL(LOG_INFO);
 }
 
 

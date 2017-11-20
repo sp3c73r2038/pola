@@ -23,6 +23,7 @@ typedef struct {
 	int guard;
 	char guard_pidfile[2048];
 	char guard_pre_start[4096];
+	unsigned int ignore_term;
 } app_t;
 
 typedef struct {
