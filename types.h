@@ -10,6 +10,7 @@ typedef struct {
 typedef struct {
 	char name[1024];
 	char command[4096];
+	char directory[2048];
 	char out_file[2048];
 	char err_file[2048];
 	char user[128];

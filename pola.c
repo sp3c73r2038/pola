@@ -741,6 +741,7 @@ void read_app_config(const char * path, app_t * app)
 	app->interval = 0;
 	app->proc_num = 1;
 	snprintf(app->user, 1, "%s", "");
+	snprintf(app->directory, 2, "%s", "/");
 	app->heartbeat = 0;
 	app->heartbeat_interval = HEARTBEAT_INTERVAL_DEFAULT;
 	snprintf(app->heartbeat_host, 1, "%s", "");
@@ -871,6 +872,11 @@ void read_app_config(const char * path, app_t * app)
 			unsigned int ignore_term = 0;
 			sscanf(value, "%u", &ignore_term);
 			app->ignore_term = ignore_term;
+			continue;
+		}
+		if (!strcmp("directory", key)) {
+			char *s = trim(value);
+			snprintf(app->directory, strlen(s) + 1, "%s", s);
 			continue;
 		}
 	}
@@ -1097,6 +1103,13 @@ exit:
 
 void run(const app_t app)
 {
+
+	/* change working directory */
+	if (chdir(app.directory) < 0) {
+		perror("run chdir()");
+		exit(1);
+	}
+
 	if (metric_p) {
 		pthread_cancel(metric_p);
 		pthread_join(metric_p, NULL);
@@ -1121,7 +1134,6 @@ void run_daemon(app_t app)
 
 	if (fork()) return;
 
-	/* TODO: app.directory */
 	if (chdir("/") < 0) {
 		perror("run_daemon chdir()");
 		exit(1);
@@ -1344,6 +1356,7 @@ void info(const app_t app)
 	get_pid_filename(app, pid_fname);
 
 	printf("  name: %s\n", app.name);
+	printf("  directory: %s\n", app.directory);
 	printf("  out_file: %s\n", app.out_file);
 	printf("  pid_file: %s\n", pid_fname);
 	printf("  user: %s\n", app.user);
