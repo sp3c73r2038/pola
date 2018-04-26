@@ -50,6 +50,13 @@
 #define IOLOOP_INTERVAL_DEFAULT 1000
 #define HOSTNAME_BUF_SIZE 256
 
+#ifndef VERSION
+#define VERSION "missing version"
+#endif
+#ifndef BUILD_TIME
+#define BUILD_TIME "missing time"
+#endif
+
 
 static config_t config;
 static app_t current_app;
@@ -1403,7 +1410,9 @@ void help()
 void version()
 {
 	printf("\n");
-	printf("  %s version: %s\n", sys_argv[0], VERSION);
+	printf("  %s\n", sys_argv[0]);
+	printf("  version: %s\n", VERSION);
+	printf("  build time: %s\n", BUILD_TIME);
 	printf("\n");
 }
 
