@@ -47,6 +47,7 @@
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define DEFAULT_LOCALE "en_US.UTF-8"
 #define HEARTBEAT_INTERVAL_DEFAULT 5000000
+#define IOLOOP_INTERVAL_DEFAULT 1000
 #define HOSTNAME_BUF_SIZE 256
 
 
@@ -713,8 +714,9 @@ void read_config(const char * path)
 	fclose(fh);
 
 pola_config_default:
-	if (config.interval == 0) {
-		config.interval = 100;
+	/* must not be less than this value */
+	if (config.interval < IOLOOP_INTERVAL_DEFAULT) {
+		config.interval = IOLOOP_INTERVAL_DEFAULT;
 	}
 
 	if (!strcmp("", config.dir)) {
