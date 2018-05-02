@@ -1224,12 +1224,17 @@ void start(const app_t app)
 		   "started", app.name);
 }
 
-
+/* legacy entry for ``pola run'' */
 void start_foreground(const app_t app)
 {
 	run(app);
 }
 
+/* pola run ... function entry */
+void cmd_run(const app_t app)
+{
+	run(app);
+}
 
 void stop(const app_t app)
 {
@@ -1393,16 +1398,17 @@ void help()
 	printf("\n");
 	printf("  %s usage: \n", sys_argv[0]);
 	printf("\n");
-	printf("    %s [status]\n", sys_argv[0]);
-	printf("    %s status [app_name]\n", sys_argv[0]);
-	printf("    %s start [app_name]\n", sys_argv[0]);
-	printf("    %s stop [app_name]\n", sys_argv[0]);
-	printf("    %s restart [app_name]\n", sys_argv[0]);
 	printf("    %s force-restart [app_name]\n", sys_argv[0]);
+	printf("    %s help\n", sys_argv[0]);
 	printf("    %s hup [app_name]\n", sys_argv[0]);
 	printf("    %s info [app_name]\n", sys_argv[0]);
+	printf("    %s restart [app_name]\n", sys_argv[0]);
+	printf("    %s run app_name\n", sys_argv[0]);
+	printf("    %s start [app_name]\n", sys_argv[0]);
+	printf("    %s [status]\n", sys_argv[0]);
+	printf("    %s stop [app_name]\n", sys_argv[0]);
 	printf("    %s tail app_name\n", sys_argv[0]);
-	printf("    %s help\n", sys_argv[0]);
+	printf("    %s version\n", sys_argv[0]);
 	printf("\n");
 
 }
@@ -1439,22 +1445,8 @@ int main(int argc, const char ** argv)
 
 	if (argc >= 2) {
 
-		if (!strcmp("run", argv[1])) {
-			if (argc == 2) {
-				printf("%s <command>\n", argv[0]);
-				exit(1);
-			}
-
-			app_t app;
-			memset(&app, 0, sizeof(app_t));
-			snprintf(app.command, strlen(argv[2]) + 1,
-					 "%s", argv[2]);
-			app.proc_num = 1;
-			app.interval = 1;
-			run(app);
-			exit(1);
-		}
-		else if (!strcmp("start", argv[1])) {
+		// TODO: pola exec ...
+		if (!strcmp("start", argv[1])) {
 			func = &start;
 		}
 		else if (!strcmp("start-foreground", argv[1])) {
@@ -1464,6 +1456,14 @@ int main(int argc, const char ** argv)
 				exit(1);
 			}
 			func = &start_foreground;
+		}
+		else if (!strcmp("run", argv[1])) {
+			if (argc == 2) {
+				printf("%s run <app>\n",
+					   argv[0]);
+				exit(1);
+			}
+			func = &cmd_run;
 		}
 		else if (!strcmp("status", argv[1])) {
 			func = &status;
