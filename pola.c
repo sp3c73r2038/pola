@@ -924,6 +924,13 @@ void touch_pid_file(const char * filename) {
 	utime(filename, &ubuf);
 }
 
+void remove_pid_file(const char * filename) {
+	int status = remove(filename);
+	if (status != 0) {
+		perror("cannot remove pid file");
+	}
+}
+
 int last_mtime(const char * filename, char * p)
 {
 
@@ -1050,6 +1057,12 @@ void write_pidfile(const char * filename, pid_t pid)
 
 void status(const app_t app)
 {
+	pid_t pid = 0;
+	char * _status =
+		ANSI_COLOR_BRIGHT_RED
+		"stopped"
+		ANSI_COLOR_RESET;
+
 	char * pid_fname;
 	pid_fname = (char *)malloc((1024 + 1) * sizeof(char));
 
@@ -1061,17 +1074,14 @@ void status(const app_t app)
 	int p = access(pid_fname, R_OK);
 
 	if (p == -1 && errno == ENOENT) {
-		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-8s "
-			   ANSI_COLOR_RESET ": %s\n",
-			   "new", app.name);
+		snprintf(mtime_buf, 4, "N/A");
 		goto exit;
 	}
+	else {
+		last_mtime(pid_fname, mtime_buf);
+	}
 
-	last_mtime(pid_fname, mtime_buf);
-
-	pid_t pid = read_pidfile(pid_fname);
-
-	char * _status;
+	pid = read_pidfile(pid_fname);
 
 	if (app.disabled) {
 		_status = (
@@ -1087,14 +1097,8 @@ void status(const app_t app)
 			ANSI_COLOR_RESET
 			);
 	}
-	else {
-		_status = (
-			ANSI_COLOR_BRIGHT_RED
-			"stopped"
-			ANSI_COLOR_RESET
-			);
-	}
 
+exit:
 	printf(
 		" %-20s : %12s : "
 		ANSI_COLOR_BRIGHT_CYAN
@@ -1103,9 +1107,7 @@ void status(const app_t app)
 		"%s\n",
 		_status, mtime_buf, pid, app.name);
 
-	goto exit;
-
-exit:
+	free(mtime_buf);
 	free(pid_fname);
 }
 
@@ -1248,7 +1250,6 @@ void stop(const app_t app)
 	memset(pid_fname, '\0', 4096 + 1);
 	get_pid_filename(app, pid_fname);
 	pid_t pid = read_pidfile(pid_fname);
-	free(pid_fname);
 	int killed = 0;
 
 	if (pid > 0 && pid_alive(pid)) {
@@ -1285,7 +1286,7 @@ void stop(const app_t app)
 	}
 
 	if (killed) {
-		touch_pid_file(pid_fname);
+		remove_pid_file(pid_fname);
 		printf(ANSI_COLOR_BRIGHT_YELLOW "  %-7s"
 			   ANSI_COLOR_RESET " : %s\n",
 			   "killed", app.name);
@@ -1295,6 +1296,8 @@ void stop(const app_t app)
 			   ANSI_COLOR_RESET	" : %s\n",
 			   "cannot kill in 5 seconds", app.name);
 	}
+
+	free(pid_fname);
 }
 
 void restart(const app_t app)
