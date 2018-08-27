@@ -73,6 +73,8 @@ void cleanup_metric_flag(void *);
 void * metric_thread(void *);
 int send_udp_msg(const char *, const int, const char *);
 pid_t read_pidfile(const char *);
+void get_pid_filename(app_t, char *);
+void remove_pid_file(const char *);
 
 void * metric_thread(void * args)
 {
@@ -330,6 +332,11 @@ void signal_handler(int sig) {
 	}
 	sig_handling = 1;
 
+	char * pid_fname;
+	pid_fname = (char *)malloc((4096 + 1) * sizeof(char));
+	memset(pid_fname, '\0', 4096 + 1);
+	get_pid_filename(current_app, pid_fname);
+
 	if (sig == SIGHUP) {
 		signal(SIGHUP, signal_handler);
 		// printf("[%s] SIGHUP dectectd!\n", sys_argv[0]);
@@ -356,6 +363,9 @@ void signal_handler(int sig) {
 		int status = 0;
 		waitpid(0, &status, 0);
 		sig_handling = 0;
+
+		remove_pid_file(pid_fname);
+
 		exit(0);
 	}
 	if (sig == SIGQUIT) {
@@ -369,6 +379,9 @@ void signal_handler(int sig) {
 		int status = 0;
 		waitpid(0, &status, 0);
 		sig_handling = 0;
+
+		remove_pid_file(pid_fname);
+
 		exit(0);
 	}
 }
@@ -927,7 +940,8 @@ void touch_pid_file(const char * filename) {
 void remove_pid_file(const char * filename) {
 	int status = remove(filename);
 	if (status != 0) {
-		perror("cannot remove pid file");
+		// perror("cannot remove pid file");
+		fprintf(stderr, "cannot remove pid file");
 	}
 }
 
@@ -1063,6 +1077,15 @@ void status(const app_t app)
 		"stopped"
 		ANSI_COLOR_RESET;
 
+	if (app.disabled) {
+		_status = (
+			ANSI_COLOR_BRIGHT_YELLOW
+			"disabled"
+			ANSI_COLOR_RESET
+			);
+	}
+
+
 	char * pid_fname;
 	pid_fname = (char *)malloc((1024 + 1) * sizeof(char));
 
@@ -1083,14 +1106,7 @@ void status(const app_t app)
 
 	pid = read_pidfile(pid_fname);
 
-	if (app.disabled) {
-		_status = (
-			ANSI_COLOR_BRIGHT_YELLOW
-			"disabled"
-			ANSI_COLOR_RESET
-			);
-	}
-	else if (pid > 0 && pid_alive(pid)) {
+	if (pid > 0 && pid_alive(pid)) {
 		_status = (
 			ANSI_COLOR_BRIGHT_GREEN
 			"running"
