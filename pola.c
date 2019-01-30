@@ -1385,10 +1385,18 @@ void info(const app_t app)
 	struct stat s;
 	time_t t;
 
-
 	get_pid_filename(app, pid_fname);
 
+	// get config file path
+	char * apps_path = (char *)malloc((strlen(POLA_APPS) + 1) * sizeof(char));
+	strncpy(apps_path, POLA_APPS, strlen(POLA_APPS));
+	char * config_filename = (char *)malloc((1024 + 1) * sizeof(char));
+	char * config_dir = dirname(apps_path);
+	path_join(config_dir, (char *)app.name, config_filename);
+
 	printf("  name: %s\n", app.name);
+	printf("  command: ==>\" %s \"<==\n", app.command);
+	printf("  config: %s.conf\n", config_filename);
 	printf("  directory: %s\n", app.directory);
 	printf("  out_file: %s\n", app.out_file);
 	printf("  pid_file: %s\n", pid_fname);
